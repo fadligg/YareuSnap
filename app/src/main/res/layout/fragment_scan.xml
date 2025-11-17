@@ -7,59 +7,93 @@
     android:layout_height="match_parent"
     tools:context=".ui.main.ScanFragment">
 
+    <!-- 1. Kamera Preview -->
     <androidx.camera.view.PreviewView
         android:id="@+id/viewFinder"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- 2. UI Overlay Kamera -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
+
+        <!-- Header Gradient (Supaya teks atas terbaca) -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:background="@drawable/gradient_splash_background"
+            android:alpha="0.8"
+            app:layout_constraintTop_toTopOf="parent"/>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="YareuSnap AI"
             android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:layout_marginTop="40dp"
-            android:background="@drawable/bg_bottom_sheet_rounded"
-            android:backgroundTint="#80000000"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginTop="48dp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"/>
 
-        <ImageView
-            android:id="@+id/btnCapture"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:src="@drawable/bg_bottom_sheet_rounded"
-            app:tint="#FFFFFF"
-            android:padding="4dp"
-            android:layout_marginBottom="110dp"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Arahkan kamera ke makanan"
+            android:textColor="#E0E0E0"
+            android:textSize="14sp"
+            app:layout_constraintTop_toBottomOf="@id/viewFinder"
+            app:layout_constraintBottom_toTopOf="@id/btnContainer"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginBottom="20dp"/>
+
+        <!-- Container Tombol Capture -->
+        <FrameLayout
+            android:id="@+id/btnContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="100dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"/>
+            app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageView
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@android:drawable/ic_menu_search"
-            app:tint="#000000"
-            app:layout_constraintTop_toTopOf="@id/btnCapture"
-            app:layout_constraintBottom_toBottomOf="@id/btnCapture"
-            app:layout_constraintStart_toStartOf="@id/btnCapture"
-            app:layout_constraintEnd_toEndOf="@id/btnCapture"/>
+            <!-- Lingkaran Luar (Border Putih) -->
+            <View
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:background="@drawable/bg_circle_border_white"/>
+
+            <!-- Lingkaran Dalam (Tombol Putih Solid) -->
+            <ImageView
+                android:id="@+id/btnCapture"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_circle_solid_white"
+                android:elevation="4dp"/>
+
+            <!-- Icon Search di tengah -->
+            <ImageView
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:src="@android:drawable/ic_menu_search"
+                app:tint="#2E7D32"
+                android:layout_gravity="center"
+                android:elevation="8dp"/>
+        </FrameLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <!-- 3. Bottom Sheet Hasil (Desain lebih rapi) -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/bottomSheetLayout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="600dp"
         android:background="@drawable/bg_bottom_sheet_rounded"
+        android:backgroundTint="#FFFFFF"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
         app:behavior_hideable="true"
         app:behavior_peekHeight="0dp">
@@ -70,73 +104,88 @@
             android:orientation="vertical"
             android:padding="24dp">
 
+            <!-- Handle Bar (Garis kecil di atas sheet) -->
             <View
-                android:layout_width="40dp"
-                android:layout_height="4dp"
+                android:layout_width="50dp"
+                android:layout_height="6dp"
                 android:background="#E0E0E0"
                 android:layout_gravity="center"
-                android:layout_marginBottom="20dp"/>
+                android:layout_marginBottom="24dp"/>
 
+            <!-- Gambar Hasil Foto -->
             <androidx.cardview.widget.CardView
-                android:layout_width="200dp"
+                android:layout_width="match_parent"
                 android:layout_height="200dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                android:layout_gravity="center"
-                android:layout_marginBottom="16dp">
+                app:cardBackgroundColor="#F5F5F5"
+                android:layout_marginBottom="20dp">
 
                 <ImageView
                     android:id="@+id/ivResultImage"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:scaleType="centerCrop"
-                    android:src="@android:color/darker_gray"/>
+                    android:scaleType="centerCrop"/>
             </androidx.cardview.widget.CardView>
 
+
+            <!--
+            ================================================
+            INI DIA PERBAIKANNYA (ProgressBar ditambahkan di sini)
+            ================================================
+            -->
             <ProgressBar
                 android:id="@+id/progressBar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:visibility="gone"/>
+                android:visibility="gone"
+                android:indeterminateTint="@color/nav_item_color_state"
+                android:layout_marginBottom="16dp"/>
+
 
             <TextView
                 android:id="@+id/tvFoodName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Mendeteksi..."
-                android:textSize="24sp"
+                android:text="Hasil Deteksi"
+                android:textSize="22sp"
                 android:textStyle="bold"
-                android:textColor="#000000"/>
+                android:textColor="#212121"/>
 
             <TextView
                 android:id="@+id/tvCalories"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Total Kalori: -"
+                android:text="0 kkal"
                 android:textSize="16sp"
-                android:textColor="#757575"
-                android:layout_marginBottom="16dp"/>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#EEEEEE"
-                android:layout_marginBottom="16dp"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Rekomendasi Nutrisi Pelengkap:"
+                android:textColor="#2E7D32"
                 android:textStyle="bold"
-                android:layout_marginBottom="8dp"/>
+                android:layout_marginBottom="16dp"/>
 
-            <TextView
-                android:id="@+id/tvRecommendation"
+            <!-- Rekomendasi Box -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Scan makanan untuk melihat saran..."
-                android:lineSpacingExtra="4dp"/>
+                android:orientation="vertical"
+                android:background="@drawable/bg_rounded_light_green"
+                android:padding="16dp">
+
+                <TextView
+                    android:text="Saran Nutrisi"
+                    android:textStyle="bold"
+                    android:textColor="#1B5E20"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+                <TextView
+                    android:id="@+id/tvRecommendation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Informasi nutrisi akan muncul di sini."
+                    android:textColor="#333333"
+                    android:layout_marginTop="4dp"/>
+            </LinearLayout>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
