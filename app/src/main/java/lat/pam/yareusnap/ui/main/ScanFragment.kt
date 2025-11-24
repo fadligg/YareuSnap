@@ -153,27 +153,86 @@ class ScanFragment : Fragment() {
     }
 
     // --- LOGIC GOOGLE LENS EFFECT ---
+//    private fun showBottomSheetResult(photoFile: File) {
+//        viewFinder.post {
+//            // 1. Naikkan Bottom Sheet
+//            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+//
+//            // 2. TAMPILKAN GAMBAR YANG BARU DIFOTO
+//            val photoUri = android.net.Uri.fromFile(photoFile)
+//            ivResultImage.setImageURI(photoUri) // <--- MAGIC-NYA DISINI
+//
+//            // 3. Set UI Loading
+//            progressBar.visibility = View.VISIBLE
+//            tvFoodName.text = "YareuSnap AI..."
+//            tvRecommendation.text = "Sedang menganalisis nutrisi..."
+//
+//            // 4. Simulasi Delay AI
+//            viewFinder.postDelayed({
+//                progressBar.visibility = View.GONE
+//                tvFoodName.text = "Nasi Goreng"
+//                tvRecommendation.text = "Kalori: 300 kkal. \nSaran: Kurangi porsi nasi, tambah timun."
+//            }, 2000)
+//        }
+//    }
+    // ... (kode sebelumnya tetap sama)
+
     private fun showBottomSheetResult(photoFile: File) {
         viewFinder.post {
-            // 1. Naikkan Bottom Sheet
-            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-
-            // 2. TAMPILKAN GAMBAR YANG BARU DIFOTO
+            // 1. Tampilkan Gambar yang barusan difoto user
             val photoUri = android.net.Uri.fromFile(photoFile)
-            ivResultImage.setImageURI(photoUri) // <--- MAGIC-NYA DISINI
+            ivResultImage.setImageURI(photoUri)
 
-            // 3. Set UI Loading
+            // 2. Ubah status jadi Loading
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
             progressBar.visibility = View.VISIBLE
-            tvFoodName.text = "YareuSnap AI..."
-            tvRecommendation.text = "Sedang menganalisis nutrisi..."
+            tvFoodName.text = "Menganalisis..."
+            tvRecommendation.text = "Mohon tunggu sebentar..."
 
-            // 4. Simulasi Delay AI
-            viewFinder.postDelayed({
-                progressBar.visibility = View.GONE
-                tvFoodName.text = "Nasi Goreng"
-                tvRecommendation.text = "Kalori: 300 kkal. \nSaran: Kurangi porsi nasi, tambah timun."
-            }, 2000)
+            // 3. Panggil API (Test Drive)
+            fetchFoodData()
         }
+    }
+
+    // FUNGSI BARU BUAT NEMBAK API
+    private fun fetchFoodData() {
+        val client = lat.pam.yareusnap.api.ApiConfig.getApiService().getRandomFood()
+
+        client.enqueue(object : retrofit2.Callback<lat.pam.yareusnap.data.FoodResponse> {
+            override fun onResponse(
+                call: retrofit2.Call<lat.pam.yareusnap.data.FoodResponse>,
+                response: retrofit2.Response<lat.pam.yareusnap.data.FoodResponse>
+            ) {
+                // Sembunyikan Loading
+                progressBar.visibility = View.GONE
+
+                if (response.isSuccessful) {
+                    val meals = response.body()?.meals
+                    if (!meals.isNullOrEmpty()) {
+                        val food = meals[0] // Ambil item pertama
+
+                        // Update UI dengan data dari Internet
+                        tvFoodName.text = food.name
+                        tvRecommendation.text = "ID Makanan: ${food.id}\n(Data ini asli dari TheMealDB!)"
+
+                        // Opsional: Kalau mau ganti gambar hasil scan dengan gambar dari API
+                        // Glide.with(requireContext()).load(food.imageUrl).into(ivResultImage)
+                    } else {
+                        tvFoodName.text = "Tidak Dikenali"
+                    }
+                } else {
+                    tvFoodName.text = "Error API"
+                    Log.e(TAG, "onFailure: ${response.message()}")
+                }
+            }
+
+            override fun onFailure(call: retrofit2.Call<lat.pam.yareusnap.data.FoodResponse>, t: Throwable) {
+                progressBar.visibility = View.GONE
+                tvFoodName.text = "Gagal Koneksi"
+                tvRecommendation.text = "Cek internet kamu: ${t.message}"
+                Log.e(TAG, "onFailure: ${t.message}")
+            }
+        })
     }
 
     private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
