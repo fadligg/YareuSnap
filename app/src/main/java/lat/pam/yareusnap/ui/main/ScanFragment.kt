@@ -1,5 +1,9 @@
 package lat.pam.yareusnap.ui.main
 
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -28,6 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+
 
 class ScanFragment : Fragment() {
 
@@ -107,7 +112,9 @@ class ScanFragment : Fragment() {
                 it.setSurfaceProvider(viewFinder.surfaceProvider)
             }
 
-            imageCapture = ImageCapture.Builder().build()
+            imageCapture = ImageCapture.Builder()
+                .setTargetRotation(viewFinder.display.rotation) // <--- TAMBAHAN PENTING
+                .build()
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
@@ -189,47 +196,77 @@ class ScanFragment : Fragment() {
             tvFoodName.text = "Menganalisis..."
             tvRecommendation.text = "Mohon tunggu sebentar..."
 
-            // 3. Panggil API (Test Drive)
-            fetchFoodData()
+            // 3. Panggil API (Oper file foto ke sini!)
+            fetchFoodData(photoFile) // <--- PERBAIKANNYA DISINI
         }
     }
 
     // FUNGSI BARU BUAT NEMBAK API
-    private fun fetchFoodData() {
-        val client = lat.pam.yareusnap.api.ApiConfig.getApiService().getRandomFood()
+    private fun fetchFoodData(photoFile: File) {
+        // 1. Siapkan File untuk Upload
+        // Kompresi atau pastikan formatnya (opsional), tapi raw file juga oke
+        val requestFile = photoFile.asRequestBody("image/jpeg".toMediaTypeOrNull())
+        val body = MultipartBody.Part.createFormData("file", photoFile.name, requestFile)
+        // Note: "file" adalah nama parameter di FastAPI (@UploadFile file: ...), cek Pythonmu!
 
-        client.enqueue(object : retrofit2.Callback<lat.pam.yareusnap.data.FoodResponse> {
+        // 2. Panggil API
+        val client = lat.pam.yareusnap.api.ApiConfig.getApiService().uploadImage(body)
+
+        client.enqueue(object : retrofit2.Callback<lat.pam.yareusnap.data.ScanResponse> {
             override fun onResponse(
-                call: retrofit2.Call<lat.pam.yareusnap.data.FoodResponse>,
-                response: retrofit2.Response<lat.pam.yareusnap.data.FoodResponse>
+                call: retrofit2.Call<lat.pam.yareusnap.data.ScanResponse>,
+                response: retrofit2.Response<lat.pam.yareusnap.data.ScanResponse>
             ) {
-                // Sembunyikan Loading
                 progressBar.visibility = View.GONE
 
                 if (response.isSuccessful) {
-                    val meals = response.body()?.meals
-                    if (!meals.isNullOrEmpty()) {
-                        val food = meals[0] // Ambil item pertama
+                    val result = response.body()
+                    if (result != null) {
+                        // 1. UPDATE NAMA MAKANAN
+                        // Ambil item pertama dari List, atau gabungkan kalau ada banyak
+                        val foodList = result.detectedFoods
+                        val foodName = if (!foodList.isNullOrEmpty()) {
+                            foodList.joinToString(", ").replace("_", " ").capitalize()
+                            // joinToString biar "macaron, baklava" gabung jadi satu string
+                        } else {
+                            "Tidak Terdeteksi"
+                        }
 
-                        // Update UI dengan data dari Internet
-                        tvFoodName.text = food.name
-                        tvRecommendation.text = "ID Makanan: ${food.id}\n(Data ini asli dari TheMealDB!)"
+                        tvFoodName.text = foodName
 
-                        // Opsional: Kalau mau ganti gambar hasil scan dengan gambar dari API
-                        // Glide.with(requireContext()).load(food.imageUrl).into(ivResultImage)
+                        // 2. UPDATE REKOMENDASI & NUTRISI
+                        val analysis = result.nutritionAnalysis
+                        val info = StringBuilder()
+
+                        // Tampilkan Food Type (jika ada)
+                        analysis?.foodType?.let {
+                            info.append("Kategori: $it\n\n")
+                        }
+
+                        // Tampilkan List Rekomendasi (jika ada)
+                        analysis?.recommendations?.let { recs ->
+                            info.append("Saran:\n")
+                            recs.forEach { saran ->
+                                info.append("- $saran\n")
+                            }
+                        }
+
+                        // Jika kosong semua
+                        if (info.isEmpty()) {
+                            info.append("Data nutrisi belum tersedia.")
+                        }
+
+                        tvRecommendation.text = info.toString()
                     } else {
-                        tvFoodName.text = "Tidak Dikenali"
+                        tvFoodName.text = "Data Kosong"
                     }
-                } else {
-                    tvFoodName.text = "Error API"
-                    Log.e(TAG, "onFailure: ${response.message()}")
                 }
             }
 
-            override fun onFailure(call: retrofit2.Call<lat.pam.yareusnap.data.FoodResponse>, t: Throwable) {
+            override fun onFailure(call: retrofit2.Call<lat.pam.yareusnap.data.ScanResponse>, t: Throwable) {
                 progressBar.visibility = View.GONE
                 tvFoodName.text = "Gagal Koneksi"
-                tvRecommendation.text = "Cek internet kamu: ${t.message}"
+                tvRecommendation.text = "Server Render mungkin sedang tidur (Cold Start). Coba lagi dalam 30 detik.\nError: ${t.message}"
                 Log.e(TAG, "onFailure: ${t.message}")
             }
         })
