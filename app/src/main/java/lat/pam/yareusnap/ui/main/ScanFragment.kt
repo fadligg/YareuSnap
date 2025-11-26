@@ -1,9 +1,5 @@
 package lat.pam.yareusnap.ui.main
 
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.asRequestBody
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -32,15 +28,20 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 
 class ScanFragment : Fragment() {
 
-    // Variabel Kamera
+    // --- API KEY MISTRAL ---
+    // Ganti ini dengan API Key asli dari console.mistral.ai
+    // Formatnya harus ada kata "Bearer " di depan
+    private val MISTRAL_API_KEY = "Bearer U4r3DVYoLxz3U8mwUID8EvVRg1bTnavc"
+
+    // Variabel Kamera & UI
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
-
-    // Variabel UI
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<NestedScrollView>
     private lateinit var viewFinder: PreviewView
     private lateinit var btnCapture: ImageView
@@ -48,241 +49,184 @@ class ScanFragment : Fragment() {
     private lateinit var tvFoodName: TextView
     private lateinit var tvRecommendation: TextView
     private lateinit var ivResultImage: ImageView
+    private lateinit var tvCalories: TextView
 
-
-
-    // Permission Launcher
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
-            if (isGranted) {
-                startCamera()
-            } else {
-                Toast.makeText(requireContext(), "Izin kamera wajib diterima!", Toast.LENGTH_SHORT).show()
-            }
+            if (isGranted) startCamera() else Toast.makeText(requireContext(), "Izin ditolak", Toast.LENGTH_SHORT).show()
         }
 
-    // 1. Setup Layout Fragment
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_scan, container, false)
     }
 
-    // 2. Setup Logic setelah Layout jadi
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        // Inisialisasi View
         viewFinder = view.findViewById(R.id.viewFinder)
         btnCapture = view.findViewById(R.id.btnCapture)
         progressBar = view.findViewById(R.id.progressBar)
         tvFoodName = view.findViewById(R.id.tvFoodName)
         tvRecommendation = view.findViewById(R.id.tvRecommendation)
         ivResultImage = view.findViewById(R.id.ivResultImage)
+        tvCalories = view.findViewById(R.id.tvCalories)
 
-        // Setup Bottom Sheet
         val bottomSheet = view.findViewById<NestedScrollView>(R.id.bottomSheetLayout)
         bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet)
-        bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN // Awalnya sembunyi
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // Cek Izin Kamera
-        if (allPermissionsGranted()) {
-            startCamera()
-        } else {
-            requestPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
+        if (allPermissionsGranted()) startCamera() else requestPermissionLauncher.launch(Manifest.permission.CAMERA)
 
-        // Tombol Shutter logic
-        btnCapture.setOnClickListener {
-            takePhoto()
-        }
+        btnCapture.setOnClickListener { takePhoto() }
     }
 
-    // --- LOGIC KAMERA ---
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
-
         cameraProviderFuture.addListener({
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
-
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(viewFinder.surfaceProvider)
-            }
+            val cameraProvider = cameraProviderFuture.get()
+            val preview = Preview.Builder().build().also { it.setSurfaceProvider(viewFinder.surfaceProvider) }
 
             imageCapture = ImageCapture.Builder()
-                .setTargetRotation(viewFinder.display.rotation) // <--- TAMBAHAN PENTING
+                .setTargetRotation(viewFinder.display.rotation) // Fix Rotasi
                 .build()
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
             try {
                 cameraProvider.unbindAll()
-                // PENTING: Pakai viewLifecycleOwner di Fragment
-                cameraProvider.bindToLifecycle(
-                    viewLifecycleOwner, cameraSelector, preview, imageCapture
-                )
-            } catch (exc: Exception) {
-                Log.e(TAG, "Gagal start kamera", exc)
-            }
+                cameraProvider.bindToLifecycle(viewLifecycleOwner, cameraSelector, preview, imageCapture)
+            } catch (exc: Exception) { Log.e(TAG, "Gagal start kamera", exc) }
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
-
-        // Simpan di Cache (Sementara)
-        val photoFile = File(
-            requireContext().externalCacheDir,
-            SimpleDateFormat(FILENAME_FORMAT, Locale.US).format(System.currentTimeMillis()) + ".jpg"
-        )
-
+        val photoFile = File(requireContext().externalCacheDir, SimpleDateFormat(FILENAME_FORMAT, Locale.US).format(System.currentTimeMillis()) + ".jpg")
         val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
 
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(requireContext()),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Gagal ambil foto: ${exc.message}", exc)
-                }
-
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val msg = "Foto Tersimpan: ${photoFile.absolutePath}"
-                    Log.d(TAG, msg)
-
-                    // Tampilkan UI Hasil (Bottom Sheet Slide Up)
-                    showBottomSheetResult(photoFile)
-                }
+        imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(requireContext()), object : ImageCapture.OnImageSavedCallback {
+            override fun onError(exc: ImageCaptureException) { Log.e(TAG, "Gagal foto", exc) }
+            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                showBottomSheetResult(photoFile)
             }
-        )
+        })
     }
-
-    // --- LOGIC GOOGLE LENS EFFECT ---
-//    private fun showBottomSheetResult(photoFile: File) {
-//        viewFinder.post {
-//            // 1. Naikkan Bottom Sheet
-//            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-//
-//            // 2. TAMPILKAN GAMBAR YANG BARU DIFOTO
-//            val photoUri = android.net.Uri.fromFile(photoFile)
-//            ivResultImage.setImageURI(photoUri) // <--- MAGIC-NYA DISINI
-//
-//            // 3. Set UI Loading
-//            progressBar.visibility = View.VISIBLE
-//            tvFoodName.text = "YareuSnap AI..."
-//            tvRecommendation.text = "Sedang menganalisis nutrisi..."
-//
-//            // 4. Simulasi Delay AI
-//            viewFinder.postDelayed({
-//                progressBar.visibility = View.GONE
-//                tvFoodName.text = "Nasi Goreng"
-//                tvRecommendation.text = "Kalori: 300 kkal. \nSaran: Kurangi porsi nasi, tambah timun."
-//            }, 2000)
-//        }
-//    }
-    // ... (kode sebelumnya tetap sama)
 
     private fun showBottomSheetResult(photoFile: File) {
         viewFinder.post {
-            // 1. Tampilkan Gambar yang barusan difoto user
             val photoUri = android.net.Uri.fromFile(photoFile)
             ivResultImage.setImageURI(photoUri)
-
-            // 2. Ubah status jadi Loading
             bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
             progressBar.visibility = View.VISIBLE
             tvFoodName.text = "Menganalisis..."
-            tvRecommendation.text = "Mohon tunggu sebentar..."
+            tvRecommendation.text = "Sedang mengidentifikasi makanan..."
 
-            // 3. Panggil API (Oper file foto ke sini!)
-            fetchFoodData(photoFile) // <--- PERBAIKANNYA DISINI
+            // Panggil API Render (Tahap 1)
+            fetchFoodData(photoFile)
         }
     }
 
-    // FUNGSI BARU BUAT NEMBAK API
+    // --- LOGIC CHAINING (RENDER -> MISTRAL) ---
+
     private fun fetchFoodData(photoFile: File) {
-        // 1. Siapkan File untuk Upload
-        // Kompresi atau pastikan formatnya (opsional), tapi raw file juga oke
         val requestFile = photoFile.asRequestBody("image/jpeg".toMediaTypeOrNull())
         val body = MultipartBody.Part.createFormData("file", photoFile.name, requestFile)
-        // Note: "file" adalah nama parameter di FastAPI (@UploadFile file: ...), cek Pythonmu!
 
-        // 2. Panggil API
+        // 1. Panggil API Render untuk Deteksi Nama Makanan
         val client = lat.pam.yareusnap.api.ApiConfig.getApiService().uploadImage(body)
 
         client.enqueue(object : retrofit2.Callback<lat.pam.yareusnap.data.ScanResponse> {
-            override fun onResponse(
-                call: retrofit2.Call<lat.pam.yareusnap.data.ScanResponse>,
-                response: retrofit2.Response<lat.pam.yareusnap.data.ScanResponse>
-            ) {
-                progressBar.visibility = View.GONE
-
+            override fun onResponse(call: retrofit2.Call<lat.pam.yareusnap.data.ScanResponse>, response: retrofit2.Response<lat.pam.yareusnap.data.ScanResponse>) {
                 if (response.isSuccessful) {
                     val result = response.body()
-                    if (result != null) {
-                        // 1. UPDATE NAMA MAKANAN
-                        // Ambil item pertama dari List, atau gabungkan kalau ada banyak
-                        val foodList = result.detectedFoods
-                        val foodName = if (!foodList.isNullOrEmpty()) {
-                            foodList.joinToString(", ").replace("_", " ").capitalize()
-                            // joinToString biar "macaron, baklava" gabung jadi satu string
-                        } else {
-                            "Tidak Terdeteksi"
-                        }
+                    val detectedFoods = result?.detectedFoods
 
-                        tvFoodName.text = foodName
+                    if (!detectedFoods.isNullOrEmpty()) {
+                        // SUKSES: Dapat nama makanan (misal: "baklava")
+                        val foodNameRaw = detectedFoods[0]
+                        val foodNameClean = foodNameRaw.replace("_", " ").split(" ").joinToString(" ") { it.capitalize() }
 
-                        // 2. UPDATE REKOMENDASI & NUTRISI
-                        val analysis = result.nutritionAnalysis
-                        val info = StringBuilder()
+                        tvFoodName.text = foodNameClean
+                        tvRecommendation.text = "Sedang bertanya ke Mistral AI..." // Update status
 
-                        // Tampilkan Food Type (jika ada)
-                        analysis?.foodType?.let {
-                            info.append("Kategori: $it\n\n")
-                        }
+                        // 2. LANJUT KE MISTRAL (Tahap 2)
+                        askMistral(foodNameClean)
 
-                        // Tampilkan List Rekomendasi (jika ada)
-                        analysis?.recommendations?.let { recs ->
-                            info.append("Saran:\n")
-                            recs.forEach { saran ->
-                                info.append("- $saran\n")
-                            }
-                        }
-
-                        // Jika kosong semua
-                        if (info.isEmpty()) {
-                            info.append("Data nutrisi belum tersedia.")
-                        }
-
-                        tvRecommendation.text = info.toString()
                     } else {
-                        tvFoodName.text = "Data Kosong"
+                        progressBar.visibility = View.GONE
+                        tvFoodName.text = "Tidak Terdeteksi"
+                        tvRecommendation.text = "Coba ambil foto ulang dengan pencahayaan lebih baik."
                     }
+                } else {
+                    progressBar.visibility = View.GONE
+                    tvFoodName.text = "Error Render"
+                    tvRecommendation.text = "Gagal deteksi: ${response.code()}"
                 }
             }
 
             override fun onFailure(call: retrofit2.Call<lat.pam.yareusnap.data.ScanResponse>, t: Throwable) {
                 progressBar.visibility = View.GONE
                 tvFoodName.text = "Gagal Koneksi"
-                tvRecommendation.text = "Server Render mungkin sedang tidur (Cold Start). Coba lagi dalam 30 detik.\nError: ${t.message}"
-                Log.e(TAG, "onFailure: ${t.message}")
+                tvRecommendation.text = "Cek internet: ${t.message}"
             }
         })
     }
 
-    private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
-        requireContext(), Manifest.permission.CAMERA
-    ) == PackageManager.PERMISSION_GRANTED
+    private fun askMistral(foodName: String) {
+        // 1. Buat Prompt yang MEMAKSA format angka
+        val prompt = """
+            Saya punya makanan: $foodName.
+            Berikan estimasi kalori (wajib tulis angka diikuti 'kkal', misal: 250 kkal).
+            Lalu berikan rincian makronutrisi dan 3 saran kesehatan singkat.
+            Gunakan emoji. Bahasa Indonesia.
+        """.trimIndent()
 
-    override fun onDestroyView() {
-        super.onDestroyView()
-        cameraExecutor.shutdown()
+        // 2. Siapkan Request
+        val requestData = lat.pam.yareusnap.data.MistralRequest(
+            messages = listOf(
+                lat.pam.yareusnap.data.MistralMessage(role = "user", content = prompt)
+            )
+        )
+
+        // 3. Panggil API Mistral
+        val client = lat.pam.yareusnap.api.ApiConfig.getMistralService().chatWithMistral(MISTRAL_API_KEY, requestData)
+
+        client.enqueue(object : retrofit2.Callback<lat.pam.yareusnap.data.MistralResponse> {
+            override fun onResponse(call: retrofit2.Call<lat.pam.yareusnap.data.MistralResponse>, response: retrofit2.Response<lat.pam.yareusnap.data.MistralResponse>) {
+                progressBar.visibility = View.GONE
+
+                if (response.isSuccessful) {
+                    val aiReply = response.body()?.choices?.firstOrNull()?.message?.content ?: "Tidak ada data."
+
+                    // --- LOGIC EKSTRAKSI KALORI (REGEX) ---
+                    // Pola: Cari angka (digits) yang diikuti spasi (opsional) lalu kata kkal/kcal/kalori
+                    val calorieRegex = Regex("(\\d+)\\s*(?:kkal|kcal|kalori)", RegexOption.IGNORE_CASE)
+                    val matchResult = calorieRegex.find(aiReply)
+
+                    if (matchResult != null) {
+                        // Ambil angkanya saja (Group 1)
+                        val calorieValue = matchResult.groupValues[1]
+                        tvCalories.text = "$calorieValue kkal" // Masukkan ke Text Hijau!
+                    } else {
+                        tvCalories.text = "Cek Kemasan" // Kalau AI lupa kasih angka
+                    }
+
+                    // Masukkan sisa ceritanya ke kolom saran
+                    tvRecommendation.text = aiReply
+
+                } else {
+                    tvRecommendation.text = "Gagal koneksi AI: ${response.code()}"
+                }
+            }
+
+            override fun onFailure(call: retrofit2.Call<lat.pam.yareusnap.data.MistralResponse>, t: Throwable) {
+                progressBar.visibility = View.GONE
+                tvRecommendation.text = "Error: ${t.message}"
+            }
+        })
     }
 
-    companion object {
-        private const val TAG = "YareuSnapFragment"
-        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
-    }
+    private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    override fun onDestroyView() { super.onDestroyView(); cameraExecutor.shutdown() }
+    companion object { private const val TAG = "YareuSnapFragment"; private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS" }
 }

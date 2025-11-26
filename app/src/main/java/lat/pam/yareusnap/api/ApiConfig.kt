@@ -27,4 +27,11 @@ object ApiConfig {
 
         return retrofit.create(ApiService::class.java)
     }
+    fun getMistralService(): MistralApiService {
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://api.mistral.ai/") // URL MISTRAL
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        return retrofit.create(MistralApiService::class.java)
+    }
 }
