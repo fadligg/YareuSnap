@@ -7,18 +7,15 @@
     android:layout_height="match_parent"
     tools:context=".ui.main.ScanFragment">
 
-    <!-- 1. Kamera Preview -->
     <androidx.camera.view.PreviewView
         android:id="@+id/viewFinder"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- 2. UI Overlay Kamera -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- Header Gradient (Supaya teks atas terbaca) -->
         <View
             android:layout_width="match_parent"
             android:layout_height="100dp"
@@ -50,7 +47,6 @@
             app:layout_constraintEnd_toEndOf="parent"
             android:layout_marginBottom="20dp"/>
 
-        <!-- Container Tombol Capture -->
         <FrameLayout
             android:id="@+id/btnContainer"
             android:layout_width="wrap_content"
@@ -60,13 +56,11 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
-            <!-- Lingkaran Luar (Border Putih) -->
             <View
                 android:layout_width="80dp"
                 android:layout_height="80dp"
                 android:background="@drawable/bg_circle_border_white"/>
 
-            <!-- Lingkaran Dalam (Tombol Putih Solid) -->
             <ImageView
                 android:id="@+id/btnCapture"
                 android:layout_width="64dp"
@@ -75,7 +69,6 @@
                 android:background="@drawable/bg_circle_solid_white"
                 android:elevation="4dp"/>
 
-            <!-- Icon Search di tengah -->
             <ImageView
                 android:layout_width="30dp"
                 android:layout_height="30dp"
@@ -87,11 +80,10 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- 3. Bottom Sheet Hasil (Desain lebih rapi) -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/bottomSheetLayout"
         android:layout_width="match_parent"
-        android:layout_height="600dp"
+        android:layout_height="match_parent"
         android:background="@drawable/bg_bottom_sheet_rounded"
         android:backgroundTint="#FFFFFF"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
@@ -104,7 +96,6 @@
             android:orientation="vertical"
             android:padding="24dp">
 
-            <!-- Handle Bar (Garis kecil di atas sheet) -->
             <View
                 android:layout_width="50dp"
                 android:layout_height="6dp"
@@ -112,7 +103,6 @@
                 android:layout_gravity="center"
                 android:layout_marginBottom="24dp"/>
 
-            <!-- Gambar Hasil Foto -->
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="200dp"
@@ -128,12 +118,6 @@
                     android:scaleType="centerCrop"/>
             </androidx.cardview.widget.CardView>
 
-
-            <!--
-            ================================================
-            INI DIA PERBAIKANNYA (ProgressBar ditambahkan di sini)
-            ================================================
-            -->
             <ProgressBar
                 android:id="@+id/progressBar"
                 android:layout_width="wrap_content"
@@ -142,7 +126,6 @@
                 android:visibility="gone"
                 android:indeterminateTint="@color/nav_item_color_state"
                 android:layout_marginBottom="16dp"/>
-
 
             <TextView
                 android:id="@+id/tvFoodName"
@@ -163,7 +146,6 @@
                 android:textStyle="bold"
                 android:layout_marginBottom="16dp"/>
 
-            <!-- Rekomendasi Box -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -185,6 +167,32 @@
                     android:text="Informasi nutrisi akan muncul di sini."
                     android:textColor="#333333"
                     android:layout_marginTop="4dp"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="24dp"
+                android:weightSum="2">
+
+                <Button
+                    android:id="@+id/btnDiscard"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Batal"
+                    android:textColor="#D32F2F"
+                    android:backgroundTint="#FFCDD2"
+                    android:layout_marginEnd="8dp" />
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Simpan"
+                    android:backgroundTint="#2E7D32"
+                    android:textColor="#FFFFFF"/>
             </LinearLayout>
 
         </LinearLayout>

@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button // Import Button
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -21,8 +22,13 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope // Import LifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import kotlinx.coroutines.Dispatchers // Import Coroutines
+import kotlinx.coroutines.launch
 import lat.pam.yareusnap.R
+import lat.pam.yareusnap.data.database.AppDatabase // Import Database
+import lat.pam.yareusnap.data.database.FoodEntity // Import Entity
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -35,8 +41,6 @@ import okhttp3.RequestBody.Companion.asRequestBody
 class ScanFragment : Fragment() {
 
     // --- API KEY MISTRAL ---
-    // Ganti ini dengan API Key asli dari console.mistral.ai
-    // Formatnya harus ada kata "Bearer " di depan
     private val MISTRAL_API_KEY = "Bearer U4r3DVYoLxz3U8mwUID8EvVRg1bTnavc"
 
     // Variabel Kamera & UI
@@ -50,6 +54,12 @@ class ScanFragment : Fragment() {
     private lateinit var tvRecommendation: TextView
     private lateinit var ivResultImage: ImageView
     private lateinit var tvCalories: TextView
+
+    // --- TAMBAHAN BARU: Variabel Tombol & File ---
+    private lateinit var btnSave: Button
+    private lateinit var btnDiscard: Button
+    private var currentPhotoFile: File? = null // Untuk menyimpan file sementara
+    // ---------------------------------------------
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
@@ -70,8 +80,15 @@ class ScanFragment : Fragment() {
         ivResultImage = view.findViewById(R.id.ivResultImage)
         tvCalories = view.findViewById(R.id.tvCalories)
 
+        // --- TAMBAHAN BARU: Inisialisasi Tombol ---
+        btnSave = view.findViewById(R.id.btnSave)
+        btnDiscard = view.findViewById(R.id.btnDiscard)
+        // ------------------------------------------
+
         val bottomSheet = view.findViewById<NestedScrollView>(R.id.bottomSheetLayout)
         bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet)
+        bottomSheetBehavior.isFitToContents = false
+        bottomSheetBehavior.halfExpandedRatio = 0.6f
         bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
 
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -79,6 +96,18 @@ class ScanFragment : Fragment() {
         if (allPermissionsGranted()) startCamera() else requestPermissionLauncher.launch(Manifest.permission.CAMERA)
 
         btnCapture.setOnClickListener { takePhoto() }
+
+        // --- TAMBAHAN BARU: Logic Click Listener Tombol ---
+        btnDiscard.setOnClickListener {
+            // Sembunyikan sheet dan reset kamera
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+            startCamera()
+        }
+
+        btnSave.setOnClickListener {
+            saveToHistory()
+        }
+        // --------------------------------------------------
     }
 
     private fun startCamera() {
@@ -88,7 +117,7 @@ class ScanFragment : Fragment() {
             val preview = Preview.Builder().build().also { it.setSurfaceProvider(viewFinder.surfaceProvider) }
 
             imageCapture = ImageCapture.Builder()
-                .setTargetRotation(viewFinder.display.rotation) // Fix Rotasi
+                .setTargetRotation(viewFinder.display.rotation)
                 .build()
 
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -113,18 +142,54 @@ class ScanFragment : Fragment() {
     }
 
     private fun showBottomSheetResult(photoFile: File) {
+        // --- TAMBAHAN BARU: Simpan referensi file ke variabel global ---
+        currentPhotoFile = photoFile
+        // ---------------------------------------------------------------
+
         viewFinder.post {
             val photoUri = android.net.Uri.fromFile(photoFile)
             ivResultImage.setImageURI(photoUri)
-            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
             progressBar.visibility = View.VISIBLE
             tvFoodName.text = "Menganalisis..."
             tvRecommendation.text = "Sedang mengidentifikasi makanan..."
+            tvCalories.text = "..." // Reset teks kalori
 
             // Panggil API Render (Tahap 1)
             fetchFoodData(photoFile)
         }
     }
+
+    // --- TAMBAHAN BARU: Fungsi Simpan ke Database ---
+    private fun saveToHistory() {
+        val file = currentPhotoFile
+        if (file != null) {
+            val currentTime = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(System.currentTimeMillis())
+
+            val foodData = FoodEntity(
+                foodName = tvFoodName.text.toString(), // Ambil text hasil deteksi
+                calories = tvCalories.text.toString(), // Ambil text hasil kalori
+                imagePath = file.absolutePath,         // Simpan path gambar
+                date = currentTime
+            )
+
+            // Jalankan Insert di Background Thread (IO)
+            lifecycleScope.launch(Dispatchers.IO) {
+                val db = AppDatabase.getDatabase(requireContext())
+                db.foodDao().insertFood(foodData)
+
+                // Balik ke Main Thread untuk update UI
+                launch(Dispatchers.Main) {
+                    Toast.makeText(context, "Berhasil disimpan ke Riwayat!", Toast.LENGTH_SHORT).show()
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+                    startCamera() // Restart kamera
+                }
+            }
+        } else {
+            Toast.makeText(context, "Gagal menyimpan: Foto tidak ditemukan", Toast.LENGTH_SHORT).show()
+        }
+    }
+    // ------------------------------------------------
 
     // --- LOGIC CHAINING (RENDER -> MISTRAL) ---
 
@@ -132,7 +197,6 @@ class ScanFragment : Fragment() {
         val requestFile = photoFile.asRequestBody("image/jpeg".toMediaTypeOrNull())
         val body = MultipartBody.Part.createFormData("file", photoFile.name, requestFile)
 
-        // 1. Panggil API Render untuk Deteksi Nama Makanan
         val client = lat.pam.yareusnap.api.ApiConfig.getApiService().uploadImage(body)
 
         client.enqueue(object : retrofit2.Callback<lat.pam.yareusnap.data.ScanResponse> {
@@ -142,14 +206,12 @@ class ScanFragment : Fragment() {
                     val detectedFoods = result?.detectedFoods
 
                     if (!detectedFoods.isNullOrEmpty()) {
-                        // SUKSES: Dapat nama makanan (misal: "baklava")
                         val foodNameRaw = detectedFoods[0]
                         val foodNameClean = foodNameRaw.replace("_", " ").split(" ").joinToString(" ") { it.capitalize() }
 
                         tvFoodName.text = foodNameClean
-                        tvRecommendation.text = "Sedang bertanya ke Mistral AI..." // Update status
+                        tvRecommendation.text = "Sedang bertanya ke Mistral AI..."
 
-                        // 2. LANJUT KE MISTRAL (Tahap 2)
                         askMistral(foodNameClean)
 
                     } else {
@@ -173,7 +235,6 @@ class ScanFragment : Fragment() {
     }
 
     private fun askMistral(foodName: String) {
-        // 1. Buat Prompt yang MEMAKSA format angka
         val prompt = """
             Saya punya makanan: $foodName.
             Berikan estimasi kalori (wajib tulis angka diikuti 'kkal', misal: 250 kkal).
@@ -181,14 +242,12 @@ class ScanFragment : Fragment() {
             Gunakan emoji. Bahasa Indonesia.
         """.trimIndent()
 
-        // 2. Siapkan Request
         val requestData = lat.pam.yareusnap.data.MistralRequest(
             messages = listOf(
                 lat.pam.yareusnap.data.MistralMessage(role = "user", content = prompt)
             )
         )
 
-        // 3. Panggil API Mistral
         val client = lat.pam.yareusnap.api.ApiConfig.getMistralService().chatWithMistral(MISTRAL_API_KEY, requestData)
 
         client.enqueue(object : retrofit2.Callback<lat.pam.yareusnap.data.MistralResponse> {
@@ -198,20 +257,16 @@ class ScanFragment : Fragment() {
                 if (response.isSuccessful) {
                     val aiReply = response.body()?.choices?.firstOrNull()?.message?.content ?: "Tidak ada data."
 
-                    // --- LOGIC EKSTRAKSI KALORI (REGEX) ---
-                    // Pola: Cari angka (digits) yang diikuti spasi (opsional) lalu kata kkal/kcal/kalori
                     val calorieRegex = Regex("(\\d+)\\s*(?:kkal|kcal|kalori)", RegexOption.IGNORE_CASE)
                     val matchResult = calorieRegex.find(aiReply)
 
                     if (matchResult != null) {
-                        // Ambil angkanya saja (Group 1)
                         val calorieValue = matchResult.groupValues[1]
-                        tvCalories.text = "$calorieValue kkal" // Masukkan ke Text Hijau!
+                        tvCalories.text = "$calorieValue kkal"
                     } else {
-                        tvCalories.text = "Cek Kemasan" // Kalau AI lupa kasih angka
+                        tvCalories.text = "Cek Kemasan"
                     }
 
-                    // Masukkan sisa ceritanya ke kolom saran
                     tvRecommendation.text = aiReply
 
                 } else {
