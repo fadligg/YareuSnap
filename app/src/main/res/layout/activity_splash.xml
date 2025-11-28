@@ -8,11 +8,12 @@
 
     <ImageView
         android:id="@+id/imgLogo"
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:src="@drawable/ic_yareusnap_logo"
-        android:contentDescription="YareuSnap Logo"
+        android:layout_width="550dp"
+        android:layout_height="wrap_content"
+        android:adjustViewBounds="true"
         app:tint="#FFFFFF"
+        android:src="@drawable/ic_logo"
+        android:contentDescription="YareuSnap Logo"
         app:layout_constraintBottom_toTopOf="@+id/tvAppName"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -23,8 +24,8 @@
         android:id="@+id/tvAppName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="YareuSnap"
+        android:layout_marginTop="16dp"
+
         android:textColor="#FFFFFF"
         android:textSize="36sp"
         android:textStyle="bold"

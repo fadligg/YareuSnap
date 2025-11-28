@@ -12,4 +12,7 @@ interface FoodDao {
 
     @Query("SELECT * FROM food_history ORDER BY id DESC")
     fun getAllFood(): LiveData<List<FoodEntity>>
+
+    @androidx.room.Delete
+    suspend fun deleteFood(food: FoodEntity)
 }

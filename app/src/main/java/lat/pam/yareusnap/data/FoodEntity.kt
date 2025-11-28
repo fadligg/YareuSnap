@@ -9,6 +9,7 @@ data class FoodEntity(
     val id: Int = 0,
     val foodName: String,
     val calories: String,
-    val imagePath: String, // Kita simpan lokasi filenya saja
-    val date: String
+    val imagePath: String,
+    val date: String,
+    val advice: String = ""
 )

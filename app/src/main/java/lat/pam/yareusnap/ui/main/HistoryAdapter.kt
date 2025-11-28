@@ -11,8 +11,10 @@ import lat.pam.yareusnap.R
 import lat.pam.yareusnap.data.database.FoodEntity
 import java.io.File
 
-class HistoryAdapter(private var historyList: List<FoodEntity>) :
-    RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
+class HistoryAdapter(
+    private var historyList: List<FoodEntity>,
+    private val onItemClick: (FoodEntity) -> Unit // Callback untuk klik item
+) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val imgItem: ImageView = view.findViewById(R.id.imgHistoryItem)
@@ -27,15 +29,22 @@ class HistoryAdapter(private var historyList: List<FoodEntity>) :
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = historyList[position]
+
+        // Set Data Text
         holder.tvName.text = item.foodName
         holder.tvInfo.text = "${item.calories} • ${item.date}"
 
-        // Load Image dari path file
+        // Set Data Gambar
         val imgFile = File(item.imagePath)
         if (imgFile.exists()) {
             holder.imgItem.setImageURI(Uri.fromFile(imgFile))
         } else {
-            holder.imgItem.setImageResource(R.drawable.ic_launcher_background) // Gambar default jika file hilang
+            holder.imgItem.setImageResource(R.drawable.ic_launcher_background)
+        }
+
+        // Saat item list ditekan, jalankan fungsi onItemClick
+        holder.itemView.setOnClickListener {
+            onItemClick(item)
         }
     }
 

@@ -46,7 +46,7 @@ class ScanFragment : Fragment() {
     // Variabel Kamera & UI
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var bottomSheetBehavior: BottomSheetBehavior<NestedScrollView>
+    private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
     private lateinit var viewFinder: PreviewView
     private lateinit var btnCapture: ImageView
     private lateinit var progressBar: ProgressBar
@@ -85,7 +85,7 @@ class ScanFragment : Fragment() {
         btnDiscard = view.findViewById(R.id.btnDiscard)
         // ------------------------------------------
 
-        val bottomSheet = view.findViewById<NestedScrollView>(R.id.bottomSheetLayout)
+        val bottomSheet = view.findViewById<View>(R.id.bottomSheetLayout)
         bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet)
         bottomSheetBehavior.isFitToContents = false
         bottomSheetBehavior.halfExpandedRatio = 0.6f
@@ -167,26 +167,24 @@ class ScanFragment : Fragment() {
             val currentTime = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(System.currentTimeMillis())
 
             val foodData = FoodEntity(
-                foodName = tvFoodName.text.toString(), // Ambil text hasil deteksi
-                calories = tvCalories.text.toString(), // Ambil text hasil kalori
-                imagePath = file.absolutePath,         // Simpan path gambar
-                date = currentTime
+                foodName = tvFoodName.text.toString(),
+                calories = tvCalories.text.toString(),
+                imagePath = file.absolutePath,
+                date = currentTime,
+                advice = tvRecommendation.text.toString() // <--- AMBIL TEXT DARI LAYAR
             )
 
-            // Jalankan Insert di Background Thread (IO)
+            // ... (sisa kode lifecycleScope.launch sama persis, tidak berubah) ...
             lifecycleScope.launch(Dispatchers.IO) {
                 val db = AppDatabase.getDatabase(requireContext())
                 db.foodDao().insertFood(foodData)
 
-                // Balik ke Main Thread untuk update UI
                 launch(Dispatchers.Main) {
-                    Toast.makeText(context, "Berhasil disimpan ke Riwayat!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Berhasil disimpan!", Toast.LENGTH_SHORT).show()
                     bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
-                    startCamera() // Restart kamera
+                    startCamera()
                 }
             }
-        } else {
-            Toast.makeText(context, "Gagal menyimpan: Foto tidak ditemukan", Toast.LENGTH_SHORT).show()
         }
     }
     // ------------------------------------------------
@@ -236,10 +234,16 @@ class ScanFragment : Fragment() {
 
     private fun askMistral(foodName: String) {
         val prompt = """
-            Saya punya makanan: $foodName.
-            Berikan estimasi kalori (wajib tulis angka diikuti 'kkal', misal: 250 kkal).
-            Lalu berikan rincian makronutrisi dan 3 saran kesehatan singkat.
-            Gunakan emoji. Bahasa Indonesia.
+            Bertindaklah sebagai ahli gizi profesional. Berikan analisis nutrisi untuk: $foodName.
+            Gunakan Bahasa Indonesia yang natural.
+
+            Patuhi aturan format ini secara ketat:
+            1. DILARANG menggunakan simbol format teks markdown (jangan pakai bintang *, pagar #, atau bold). Tulis teks polos saja.
+            2. Di kalimat pertama, WAJIB sebutkan estimasi kalori dengan format angka diikuti 'kkal' dan WAJIB jika ribuan tulis tanpa koma maupun titik (contoh: 🔥 Total energi sekitar 1000 kkal).
+            3. 🥣 Komponen Utama: Sebutkan bahan-bahannya dalam bentuk daftar bernomor ke bawah (1., 2., 3., dst).
+            4. 📊 Makronutrisi: Jelaskan kandungan Protein, Karbohidrat, Serat, dan Lemak secara singkat langsung berapa gr tanpa tulisan setelah titik dua (contoh: Protein: 10-15 gr, dll).
+            5. 💡 Saran Kesehatan: Berikan 3 poin saran. Setiap poin WAJIB diawali dengan emoji yang berbeda dan relevan dengan isi sarannya.
+            6. Langsung ke inti pembahasan.
         """.trimIndent()
 
         val requestData = lat.pam.yareusnap.data.MistralRequest(
